@@ -1,0 +1,33 @@
+# AWS Stuff
+aws_region: us-east-1
+vpc_subnet_id: subnet-326a6b1a
+worker_instance_name: temp-deis-worker
+worker_host_aws_groups: ['allow_ssh_vpc_b848ecdd']
+worker_ssh_key_name: mffos
+## AWS Credentials that allow EC2 instance creation
+aws_access_key:
+aws_secret_key:
+## S3 credentials
+s3_access_key:
+s3_secret_key:
+s3_backup_bucket: masterfirefoxos-backup/deis/
+
+
+# Deis Stuff
+deis_domain: masterfirefoxos.com
+deis_version: 1.4.1
+
+current_deis_tunnel_ip: deis1.masterfirefoxos.com
+
+new_deis_version: 1.4.1
+new_deis_ip:
+new_deis_elb_name: # ELB Name, e.g. deis-demo-DeisWebE-KU9DV22M9IAE
+new_deis_elb_dns_name: # ELB DNS, e.g. deis-demo-DeisWebE-KU9DV22M9IAE-1413600201.us-east-1.elb.amazonaws.com
+deis_elb_security_group_name: # Security group name, e.g. deis-demo-DeisWebELBSecurityGroup-RUJ4B8TFY2OK
+deis_vpc_security_group_id: # Security group id, e.g. sg-899b0eed
+deis_elb_ssl_cert: "arn:aws:iam::342958218804:server-certificate/masterfirefoxos.com"
+
+rds_instance_name: deis-demo
+
+# Path to Deis ssh key
+ssh_key: # e.g. /home/ubuntu/.ssh/mffos
