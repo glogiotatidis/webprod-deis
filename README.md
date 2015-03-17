@@ -9,3 +9,8 @@
 5. Start the unit file `fleetctl start newrelic-sysmond.service`. This service is Global and thus it will run and monitor all the servers of the cluster.
 6. Go to NewRelic Servers and make sure that the servers have the 'Project:Webprod' tag
 7. Update 'WebProd Deis Servers' NewRelic alert policy with the new servers.
+
+
+### Add daily backups to S3
+
+Follow the [deis-backup-service instructions](https://github.com/mozilla/deis-backup-service/blob/master/README.md).
