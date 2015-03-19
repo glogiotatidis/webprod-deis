@@ -3,8 +3,8 @@
 ### Add NewRelic Server Monitoring
 
 1. SSH to one of the hosts
-2. git clone https://github.com/johanneswuerbach/newrelic-sysmond-service
-3. Edit `newrelic-sysmond.service` and replace `YOUR_NEW_RELIC_KEY` with our NewRelic Key and `CUSTOM_HOSTNAME=%H` with `CUSTOM_HOSTNAME=webprod-deis-%H`
+2. wget https://raw.githubusercontent.com/mozilla/webprod-deis/master/newrelic/newrelic-sysmond.service
+3. Edit `newrelic-sysmond.service` and replace `YOUR_NEW_RELIC_KEY` with our NewRelic Key.
 4. Load the unit file with `fleetctl load newrelic-sysmond.service`
 5. Start the unit file `fleetctl start newrelic-sysmond.service`. This service is Global and thus it will run and monitor all the servers of the cluster.
 6. Go to NewRelic Servers and make sure that the servers have the 'Project:Webprod' tag
