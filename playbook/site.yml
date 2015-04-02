@@ -1,0 +1,375 @@
+- hosts: local
+  connection: local
+  gather_facts: false
+  tags:
+    - backup
+    - restore
+  tasks:
+    - ec2:
+        key_name: "{{ worker_ssh_key_name }}"
+        instance_type: t2.micro
+        image: "{{ ubuntu_ami }}"
+        wait: yes
+        wait_timeout: 500
+        aws_access_key: "{{ aws_access_key }}"
+        aws_secret_key: "{{ aws_secret_key }}"
+        count: 1
+        group: "[{{ new_deis_vpc_security_group_name }}]" # We need at least a group that allows SSH in
+        region: "{{ aws_region }}"
+        vpc_subnet_id: "{{ vpc_subnet_id }}"
+        assign_public_ip: yes
+        instance_tags:
+          Name: "{{ worker_instance_name }}"
+      register: ec2
+    - name: Add all instance public IPs to host group
+      add_host: hostname={{ item.public_ip }} groupname=ec2hosts
+      with_items: ec2.instances
+    - name: Wait for SSH
+      pause: seconds=60
+  vars_files:
+    - local_variables.yml
+
+- hosts: ec2hosts
+  remote_user: ubuntu
+  tasks:
+    - name: Install common packages
+      apt: name={{ item }} state=present update_cache=yes cache_valid_time=600
+      sudo: True
+      with_items:
+        - python-pip
+        - python-dev
+        - git
+        - htop
+        - build-essential
+      tags:
+        - backup
+        - restore
+
+    - name: Download s3cmd
+      pip: name={{ item }}
+      sudo: True
+      with_items:
+        - setuptools==12.1
+        - 'git+https://github.com/s3tools/s3cmd/#egg=s3cmd'
+        - python-dateutil
+      tags:
+        - backup
+        - restore
+
+    # SSH key used in Deis
+    - name: Copy SSH key
+      copy: src={{ ssh_key }} dest=/home/ubuntu/.ssh/id_rsa mode=0600
+      tags:
+        - backup
+        - restore
+
+    - name: Get deisctl
+      shell: curl -sSL http://deis.io/deisctl/install.sh | sh -s {{ deis_version }}
+      tags:
+        - backup
+
+    - name: Get Deis Ceph access Key
+      shell: eval `ssh-agent -s` && ssh-add ./.ssh/id_rsa && ./deisctl config store get gateway/accessKey
+      register: deis_access_key
+      environment:
+        DEISCTL_TUNNEL: "{{ deis_ip }}"
+      tags:
+        - backup
+
+    - name: Get Deis Ceph secret Key
+      shell: eval `ssh-agent -s` && ssh-add ./.ssh/id_rsa && ./deisctl config store get gateway/secretKey
+      register: deis_secret_key
+      environment:
+        DEISCTL_TUNNEL: "{{ deis_ip }}"
+      tags:
+        - backup
+
+    - name: Copy s3cmd configuration
+      copy: src=templates/s3cfg dest=/home/ubuntu/
+      tags:
+        - backup
+
+    - name: Create s3cmd configuration for Deis
+      shell: cat s3cfg | envsubst > s3cfg.ceph
+      environment:
+        ACCESS_KEY: "{{ deis_access_key.stdout_lines.1 }}"
+        SECRET_KEY: "{{ deis_secret_key.stdout_lines.1 }}"
+        HOST_BASE: "deis-store.{{ deis_domain }}"
+        HOST_BUCKET: "deis-store.{{ deis_domain }}"
+      tags:
+        - backup
+
+    - set_fact: backupdir="/home/ubuntu/backup/{{ ansible_date_time.year }}-{{ ansible_date_time.month }}-{{ ansible_date_time.day }}"
+      tags:
+        - backup
+        - restore
+
+    - name: Create backup directory
+      command: mkdir -p {{ backupdir }}
+      tags:
+        - backup
+
+    - name: Backup current cluster (db_wall)
+      command: s3cmd -c /home/ubuntu/s3cfg.ceph get -r s3://db_wal {{ backupdir }}
+      async: 1200  # 20 Minutes. It shouldn't take that long but just in case.
+      poll: 30
+      tags:
+        - backup
+
+    - name: Backup current cluster (registry)
+      command: s3cmd -c /home/ubuntu/s3cfg.ceph get -r s3://registry {{ backupdir }}
+      async: 1200  # 20 Minutes. It shouldn't take that long but just in case.
+      poll: 30
+      tags:
+        - backup
+
+    - name: Backup logs
+      shell: ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null core@{{ deis_ip }} 'cd /var/lib/deis/store && sudo tar cpzf ~/store_file_backup.tar.gz .'
+      ignore_errors: yes
+      async: 1200  # 20 Minutes. It shouldn't take that long but just in case.
+      poll: 30
+      tags:
+        - backup
+
+    - name: Fetch log backups
+      shell: rsync -avhe 'ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null' core@{{ deis_ip }}:~/store_file_backup.tar.gz {{ backupdir }}
+      tags:
+        - backup
+
+    - name: Fetch deisctl version {{ new_deis_version }}
+      shell: curl -sSL http://deis.io/deisctl/install.sh | sh -s {{ new_deis_version }}
+      tags:
+        - restore
+
+    - name: Set domain in new Cluster
+      shell: eval `ssh-agent -s` && ssh-add ./.ssh/id_rsa && ~/deisctl config platform set domain={{ deis_domain }}
+      environment:
+        DEISCTL_TUNNEL: "{{ new_deis_ip }}"
+      tags:
+        - restore
+
+    - name: Set SSH key in new cluster
+      shell: eval `ssh-agent -s` && ssh-add ./.ssh/id_rsa && ~/deisctl config platform set sshPrivateKey=./.ssh/id_rsa
+      environment:
+        DEISCTL_TUNNEL: "{{ new_deis_ip }}"
+      tags:
+        - restore
+
+    - name: Install Deis platform in new
+      shell: eval `ssh-agent -s` && ssh-add ./.ssh/id_rsa && ~/deisctl install platform
+      environment:
+        DEISCTL_TUNNEL: "{{ new_deis_ip }}"
+      tags:
+        - restore
+
+    - name: Prepare new Deis cluster for data restoration
+      shell: eval `ssh-agent -s` && ssh-add ./.ssh/id_rsa && ./deisctl start {{ item }}
+      environment:
+        DEISCTL_TUNNEL: "{{ new_deis_ip }}"
+      with_items:
+        - store-monitor
+        - store-daemon
+        - store-metadata
+        - store-gateway@1
+        - store-volume
+        - router@1
+      tags:
+        - restore
+
+    - name: Give the new cluster some time. Wait for 60 seconds.
+      pause: seconds=60
+
+    - name: Set router maximum body to 100m
+      shell: eval `ssh-agent -s` && ssh-add ./.ssh/id_rsa && ./deisctl config router set bodySize=100m
+      environment:
+        DEISCTL_TUNNEL: "{{ new_deis_ip }}"
+      tags:
+        - restore
+
+    - name: Get Deis Ceph access Key
+      shell: eval `ssh-agent -s` && ssh-add ./.ssh/id_rsa && ./deisctl config store get gateway/accessKey
+      register: deis_access_key
+      environment:
+        DEISCTL_TUNNEL: "{{ new_deis_ip }}"
+      tags:
+        - restore
+
+    - name: Get Deis Ceph secret Key
+      shell: eval `ssh-agent -s` && ssh-add ./.ssh/id_rsa && ./deisctl config store get gateway/secretKey
+      register: deis_secret_key
+      environment:
+        DEISCTL_TUNNEL: "{{ new_deis_ip }}"
+      tags:
+        - restore
+
+    - name: Create s3cmd configuration for new Deis
+      shell: cat s3cfg | envsubst > s3cfg.newceph
+      environment:
+        ACCESS_KEY: "{{ deis_access_key.stdout_lines.1 }}"
+        SECRET_KEY: "{{ deis_secret_key.stdout_lines.1 }}"
+        HOST_BASE: "deis-store.{{ deis_domain }}"
+        HOST_BUCKET: "deis-store.{{ deis_domain }}"
+      tags:
+        - restore
+
+    - name: Copy dhclient conf
+      copy: src=files/dhclient.conf dest=/etc/dhcp/dhclient.conf
+      sudo: True
+      tags:
+        - restore
+
+    - name: Kill dhclient
+      command: pkill dhclient
+      sudo: True
+      tags:
+        - restore
+
+    - name: Start dhclient
+      command: dhclient -1 -v -pf /run/dhclient.eth0.pid -lf /var/lib/dhcp/dhclient.eth0.leases eth0
+      sudo: True
+      tags:
+        - restore
+
+    - name: Copy dns-spoof
+      copy: src=files/dns-spoof dest={{ ansible_env.HOME }}
+      tags:
+        - restore
+
+    - name: Copy dns-spoof conf
+      template: src=files/dns-spoof/spoof_map.py dest={{ ansible_env.HOME }}/dns-spoof/spoof_map.py
+      tags:
+        - restore
+
+    - name: Run dns-spoof
+      shell: cd {{ ansible_env.HOME }}/dns-spoof && while true; do python dns_spoof.py 8.8.8.8; done
+      sudo: True
+      async: 7200  # 2 Hours. It should be enough
+      poll: 0
+      tags:
+        - restore
+
+    - name: Create Ceph buckets
+      command: s3cmd -c /home/ubuntu/s3cfg.newceph mb s3://{{ item }}
+      with_items:
+        - db_wal
+        - registry
+      register: s3cmd_result
+      failed_when: "'ERROR' in s3cmd_result.stderr or 'Errno' in s3cmd_result.stderr "
+      tags:
+        - restore
+
+    - name: Restore Data (basebackups)
+      command: s3cmd -c /home/ubuntu/s3cfg.newceph put -r {{ backupdir }}/basebackups_005 s3://db_wal
+      register: s3cmd_result
+      failed_when: "'ERROR' in s3cmd_result.stderr or 'Errno' in s3cmd_result.stderr"
+      async: 2400  # 40 Minutes. It shouldn't take that long but just in case.
+      poll: 30
+      tags:
+        - restore
+
+    - name: Restore Data (wal)
+      command: s3cmd -c /home/ubuntu/s3cfg.newceph put -r {{ backupdir }}/wal_005 s3://db_wal
+      register: s3cmd_result
+      failed_when: "'ERROR' in s3cmd_result.stderr or 'Errno' in s3cmd_result.stderr"
+      async: 2400  # 40 Minutes. It shouldn't take that long but just in case.
+      poll: 30
+      tags:
+        - restore
+
+    - name: Restore Data (registry)
+      command: s3cmd -c /home/ubuntu/s3cfg.newceph put -r {{ backupdir }}/registry s3://registry
+      register: s3cmd_result
+      # TODO
+      # failed_when: "'ERROR' in s3cmd_result.stderr or 'Errno' in s3cmd_result.stderr"
+      async: 2400  # 40 Minutes. It shouldn't take that long but just in case.
+      poll: 30
+      tags:
+        - restore
+
+    - name: Restore log data 1/2
+      command: rsync -avh -e 'ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null' {{ backupdir }}/store_file_backup.tar.gz core@{{ new_deis_ip }}:~/store_file_backup.tar.gz
+      tags:
+        - restore
+
+    - name: Restore log data 2/2
+      command: ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null core@{{ new_deis_ip }} 'cd /var/lib/deis/store && sudo tar -xzpf ~/store_file_backup.tar.gz --same-owner'
+      tags:
+        - restore
+
+    - name: Start deis platform (will take some time, relax)
+      shell: eval `ssh-agent -s` && ssh-add ./.ssh/id_rsa && ./deisctl start platform
+      environment:
+        DEISCTL_TUNNEL: "{{ new_deis_ip }}"
+      tags:
+        - restore
+
+  vars_files:
+    - local_variables.yml
+
+- hosts: local
+  connection: local
+  gather_facts: false
+  tags:
+    - restore
+  tasks:
+    - name: Open HTTPS port on ELB
+      ec2_elb_lb:
+        name: "{{ new_deis_elb_name }}"
+        state: present
+        region: "{{ aws_region }}"
+        subnets: "{{ vpc_subnet_id }}"
+        listeners:
+          - protocol: http
+            load_balancer_port: 80
+            instance_port: 80
+          - protocol: tcp
+            load_balancer_port: 2222
+            instance_port: 2222
+          - protocol: https
+            load_balancer_port: 443
+            instance_protocol: http
+            instance_port: 80
+            ssl_certificate_id: "{{ deis_elb_ssl_cert }}"
+
+    - name: Open HTTPS port on Deis ELB Security Group
+      ec2_group:
+        name: "{{ new_deis_elb_security_group_name }}"
+        description: 'Deis Web ELB SecurityGroup'
+        region: "{{ aws_region }}"
+        rules:
+          - proto: tcp
+            from_port: 2222
+            to_port: 2222
+            cidr_ip: 0.0.0.0/0
+          - proto: tcp
+            from_port: 80
+            to_port: 80
+            cidr_ip: 0.0.0.0/0
+          - proto: tcp
+            from_port: 443
+            to_port: 443
+            cidr_ip: 0.0.0.0/0
+        rules_egress:
+          - proto: all
+            from_port: all
+            to_port: all
+            cidr_ip: 0.0.0.0/0
+
+    - name: Collect RDS facts
+      rds:
+        command: facts
+        region: us-east-1
+        instance_name: "{{ rds_instance_name }}"
+      register: rds_facts
+
+    - name: Add Deis VPC Security Group to RDS instance
+      rds:
+        command: modify
+        region: "{{ aws_region }}"
+        instance_name: "{{ rds_instance_name }}"
+        vpc_security_groups: "{{ rds_facts.instance.vpc_security_groups }},{{ new_deis_vpc_security_group_id }}"
+
+    - debug: msg="Manually execute http://docs.deis.io/en/latest/managing_deis/backing_up_data/#finishing-up"
+
+  vars_files:
+    - local_variables.yml

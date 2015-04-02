@@ -1,0 +1,85 @@
+#################
+## AWS Section ##
+#################
+
+## AWS Region to be used. This is the same region used by the Deis cluster.
+aws_region: us-east-1
+
+## Used to build a temporary machine (worker) that backups current Deis cluster and restores into the new one.
+# eu-central-1
+# ubuntu_ami: ami-9a380b87
+# us-east-1
+ubuntu_ami: ami-9a562df2
+
+## Name of the worker.
+worker_instance_name: temp-deis-worker
+
+## SSH Key Pair on AWS for worker.
+# worker_ssh_key_name: exampleOps
+worker_ssh_key_name:
+
+## AWS Credentials that allow EC2 instance creation
+# aws_access_key: dofusdofih32423AOIUDe
+# aws_secret_key: 09097ds097ds087sd0970ds97f097098sh0328n
+aws_access_key:
+aws_secret_key:
+
+##################
+## Deis Section ##
+##################
+
+## Domain used by deis.
+# deis_domain: example.com
+deis_domain:
+
+## Current Deis version.
+# deis_version: 1.3.1
+deis_version:
+
+## Current Deis version.
+# new_deis_version: 1.4.1
+new_deis_version:
+
+# Local path to the Private SSH key used on Deis. This will be uploaded to the worker.
+# ssh_key: /home/ubuntu/.ssh/deis
+ssh_key:
+
+## TLS cert to install on ELB
+# deis_elb_ssl_cert: "arn:aws:iam::3429218804:server-certificate/example.com"
+deis_elb_ssl_cert:
+
+## IP of one of the nodes of the current cluster.
+# deis_ip: 127.0.0.1
+deis_ip:
+
+## IP of one of the nodes of the new cluster.
+# new_deis_ip: 127.0.1.1
+new_deis_ip:
+
+## VPC subnet id in which Deis instances live
+# vpc_subnet_id: subnet-332a631a
+vpc_subnet_id:
+
+## New Deis cluster ELB name
+# new_deis_elb_name: deis-demo-DeisWebE-KU9DV22M9IAE
+new_deis_elb_name:
+
+## New Deis cluster ELB dns name
+# new_deis_elb_dns_name: deis-demo-DeisWebE-KU9DV22M9IAE-1413600201.us-east-1.elb.amazonaws.com
+new_deis_elb_dns_name:
+
+## New Deis cluster ELB security group name
+# new_deis_elb_security_group_name: deis-demo-DeisWebELBSecurityGroup-RUJ4B8TFY2OK
+new_deis_elb_security_group_name:
+
+## new Deis cluter VPC security group id
+# new_deis_vpc_security_group_id: sg-899b0sed
+new_deis_vpc_security_group_id:
+
+## new Deis cluter VPC security group name
+# new_deis_vpc_security_group_name: deis-demo-VPCSecurityGroup-5VIITWY3asdN
+new_deis_vpc_security_group_name:
+
+## RDS instance to connect to the Deis VPC.
+# rds_instance_name: foo
+rds_instance_name:
