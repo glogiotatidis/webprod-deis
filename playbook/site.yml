@@ -317,6 +317,8 @@
         name: "{{ new_deis_elb_name }}"
         state: present
         region: "{{ aws_region }}"
+        aws_access_key: "{{ aws_access_key }}"
+        aws_secret_key: "{{ aws_secret_key }}"
         subnets: "{{ vpc_subnet_id }}"
         listeners:
           - protocol: http
@@ -336,6 +338,8 @@
         name: "{{ new_deis_elb_security_group_name }}"
         description: 'Deis Web ELB SecurityGroup'
         region: "{{ aws_region }}"
+        aws_access_key: "{{ aws_access_key }}"
+        aws_secret_key: "{{ aws_secret_key }}"
         rules:
           - proto: tcp
             from_port: 2222
@@ -359,6 +363,8 @@
       rds:
         command: facts
         region: us-east-1
+        aws_access_key: "{{ aws_access_key }}"
+        aws_secret_key: "{{ aws_secret_key }}"
         instance_name: "{{ rds_instance_name }}"
       register: rds_facts
 
@@ -366,6 +372,8 @@
       rds:
         command: modify
         region: "{{ aws_region }}"
+        aws_access_key: "{{ aws_access_key }}"
+        aws_secret_key: "{{ aws_secret_key }}"
         instance_name: "{{ rds_instance_name }}"
         vpc_security_groups: "{{ rds_facts.instance.vpc_security_groups }},{{ new_deis_vpc_security_group_id }}"
 
