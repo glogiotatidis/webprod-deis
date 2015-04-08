@@ -56,7 +56,7 @@ deis_ip:
 # new_deis_ip: 127.0.1.1
 new_deis_ip:
 
-## VPC subnet id in which Deis instances live
+## VPC subnet id of one node in the new cluster.
 # vpc_subnet_id: subnet-332a631a
 vpc_subnet_id:
 

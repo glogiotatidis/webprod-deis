@@ -14,7 +14,7 @@
         aws_access_key: "{{ aws_access_key }}"
         aws_secret_key: "{{ aws_secret_key }}"
         count: 1
-        group: "[{{ new_deis_vpc_security_group_name }}]" # We need at least a group that allows SSH in
+        group: "{{ new_deis_vpc_security_group_name }}" # We need at least a group that allows SSH in
         region: "{{ aws_region }}"
         vpc_subnet_id: "{{ vpc_subnet_id }}"
         assign_public_ip: yes
