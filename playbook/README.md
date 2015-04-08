@@ -39,8 +39,9 @@ This will take a backup of the current cluster and restore into the new one.
 
 10. Run the [last step to fully restore Deis](http://docs.deis.io/en/latest/managing_deis/backing_up_data/#finishing-up)
 11. Restart all apps using `restart-all-apps.py` script.
-11. Add Instance Termination Protection.
-12. Add Alarms for Instance.
-13. Update deis{1,2,3}.example.com entries.
-14. Update *.example.com DNS entry.
-15. Delete the temporary EC2 node that was created by the playbook. Default name is `temp-deis-worker`.
+12. You may need to remove and re-add domains in the deis apps.
+13. Add Instance Termination Protection.
+14. Add Alarms for Instance.
+15. Update deis{1,2,3}.example.com entries.
+16. Update *.example.com DNS entry.
+17. Delete the temporary EC2 node that was created by the playbook. Default name is `temp-deis-worker`.
