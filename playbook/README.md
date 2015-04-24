@@ -45,3 +45,5 @@ This will take a backup of the current cluster and restore into the new one.
 15. Update deis{1,2,3}.example.com entries.
 16. Update *.example.com DNS entry.
 17. Delete the temporary EC2 node that was created by the playbook. Default name is `temp-deis-worker`.
+18. Setup [NewRelic](https://github.com/mozilla/webprod-deis/tree/master/newrelic)
+19. Setup [Backups](https://github.com/glogiotatidis/deis-backup-service)
