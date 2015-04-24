@@ -109,7 +109,7 @@
       tags:
         - backup
 
-    - name: Backup current cluster (db_wall)
+    - name: Backup current cluster (db_wal)
       command: s3cmd -c /home/ubuntu/s3cfg.ceph get -r s3://db_wal {{ backupdir }}
       async: 1200  # 20 Minutes. It shouldn't take that long but just in case.
       poll: 30
