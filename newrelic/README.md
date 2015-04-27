@@ -1,1 +1,1 @@
-Based on https://github.com/lorieri/coreos-newrelic
+Based on https://github.com/johanneswuerbach/newrelic-sysmond-service

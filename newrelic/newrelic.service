@@ -1,0 +1,18 @@
+[Unit]
+Description=newrelic-sysmond
+
+[Service]
+EnvironmentFile=/etc/environment
+TimeoutStartSec=20m
+ExecStartPre=/bin/sh -c "docker history johanneswuerbach/newrelic-sysmond >/dev/null || docker pull johanneswuerbach/newrelic-sysmond"
+ExecStartPre=/bin/sh -c "docker inspect newrelic-sysmond >/dev/null && docker rm -f newrelic-sysmond || true"
+ExecStart=/usr/bin/docker run --rm --name newrelic-sysmond -e NEW_RELIC_LICENSE_KEY=YOUR_NEW_RELIC_KEY -e CUSTOM_HOSTNAME=webprod-%H -v /var/run/docker.sock:/var/run/docker.sock johanneswuerbach/newrelic-sysmond
+ExecStopPost=-/usr/bin/docker stop newrelic-sysmond
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+
+[X-Fleet]
+Global=true
